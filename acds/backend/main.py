@@ -117,6 +117,29 @@ def reset_system():
     monitor.reset()
     return {'status': 'reset complete'}
 
+@app.post('/warp')
+async def trigger_warp():
+    """Trigger the WARP REPLAY stream of 5000 events."""
+    alert_store.clear()
+    
+    async def stream():
+        # Read the generated manifest
+        with open("speed_test_manifest.json", "r") as f:
+            warp_alerts = json.load(f)
+            
+        print("Starting warp stream...")
+        batch_size = 50
+        # 50 alerts per 0.1sec = 500/sec
+        for i in range(0, len(warp_alerts), batch_size):
+            batch = warp_alerts[i:i+batch_size]
+            for b in batch:
+                alert_store.append(b)
+            await broadcast(batch)
+            await asyncio.sleep(0.1)
+            
+    asyncio.create_task(stream())
+    return {'status': 'warp started'}
+
 @app.post('/upload')
 async def upload_log_file(file: UploadFile = File(...)):
     """

@@ -39,6 +39,37 @@ function useAnimatedCounter(target, duration = 400) {
 const formatTime = (ts) =>
   new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+// ── Lightweight Custom Virtual List ─────────────────────────────────────────
+const VirtualList = ({ items, itemHeight, containerHeight, renderItem, emptyState }) => {
+  const [scrollTop, setScrollTop] = useState(0);
+
+  if (!items || items.length === 0) {
+    return <div style={{ height: containerHeight }}>{emptyState}</div>;
+  }
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 2);
+  const endIndex = Math.min(items.length - 1, startIndex + Math.ceil(containerHeight / itemHeight) + 4);
+
+  const visibleItems = [];
+  for (let i = startIndex; i <= endIndex; i++) {
+    visibleItems.push(
+      renderItem({ index: i, style: { position: 'absolute', top: i * itemHeight, width: '100%', height: itemHeight } })
+    );
+  }
+
+  return (
+    <div
+      style={{ height: containerHeight, overflowY: 'auto', position: 'relative' }}
+      className="no-scrollbar"
+      onScroll={(e) => setScrollTop(e.target.scrollTop)}
+    >
+      <div style={{ height: items.length * itemHeight, position: 'relative' }}>
+        {visibleItems}
+      </div>
+    </div>
+  );
+};
+
 // Server-side geolocation proxy
 const geoCache = {};
 function clearGeoCache() { Object.keys(geoCache).forEach(k => delete geoCache[k]); }
@@ -146,31 +177,43 @@ export default function Blueprints() {
     }
   }, [globeRef.current]);
 
-  const [analysisMode, setAnalysisMode] = useState('synthetic'); // 'synthetic' or 'live'
+  const [analysisMode, setAnalysisMode] = useState('standby'); // 'synthetic', 'live', or 'standby'
   const [transitionMsg, setTransitionMsg] = useState(null);
 
   // ── Mode Toggles ───────────────────────────────────────────────
   useEffect(() => {
-    // When the component mounts, default to synthetic mode
-    if (analysisMode === 'synthetic') {
-      fetch(`${API}/monitor/start`, { method: 'POST' }).catch(() => {});
-    }
+    // Check initial state or set it
+    // Wait for the server, skip auto-start initially to let user press it
   }, []);
 
-  const setLiveMode = async () => {
-    if (analysisMode === 'live') return;
+  const setLiveMode = () => {
+    if (analysisMode === 'live') {
+      fetch(`${API}/monitor/stop`, { method: 'POST' }).catch(() => {});
+      resetSystem();
+      return;
+    }
     setTransitionMsg('Switching to Live Analysis...');
-    setAnalysisMode('live');
-    try { await fetch(`${API}/monitor/stop`, { method: 'POST' }); } catch(_) {}
-    setTimeout(() => setTransitionMsg(null), 1500);
+    fetch(`${API}/monitor/stop`, { method: 'POST' }).catch(() => {});
+    
+    setTimeout(() => {
+      setAnalysisMode('live');
+      setTransitionMsg(null);
+    }, 1000);
   };
 
-  const setSyntheticMode = async () => {
-    if (analysisMode === 'synthetic') return;
-    setTransitionMsg('Switching to Synthetic Analysis...');
-    setAnalysisMode('synthetic');
-    try { await fetch(`${API}/monitor/start`, { method: 'POST' }); } catch(_) {}
-    setTimeout(() => setTransitionMsg(null), 1500);
+  const setSyntheticMode = () => {
+    if (analysisMode === 'synthetic') {
+      fetch(`${API}/monitor/stop`, { method: 'POST' }).catch(() => {});
+      resetSystem();
+      return;
+    }
+    setTransitionMsg('Initializing High-Speed Data Stream...');
+    fetch(`${API}/monitor/start`, { method: 'POST' }).catch(() => {});
+    
+    setTimeout(() => {
+      setAnalysisMode('synthetic');
+      setTransitionMsg(null);
+    }, 1000);
   };
 
   const resetMonitor = async () => {
@@ -265,29 +308,31 @@ export default function Blueprints() {
             </button>
 
             {/* ── ANALYSIS MODE TOGGLES ── */}
-            <button
-              onClick={setSyntheticMode}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-['IBM_Plex_Mono'] uppercase tracking-widest transition-all border ${
-                analysisMode === 'synthetic'
-                  ? 'bg-[#A84B2B]/20 border-[#A84B2B] text-[#A84B2B]'
-                  : 'bg-[#120b0a] border-[#6B6560]/30 text-[#6B6560] hover:border-[#A84B2B]/40 hover:text-[#e5e2e1]'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${analysisMode === 'synthetic' ? 'bg-[#A84B2B] animate-pulse' : 'bg-[#6B6560]/50'}`} />
-              Synthetic Analysis
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={setSyntheticMode}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-['IBM_Plex_Mono'] uppercase tracking-widest transition-all border ${
+                  analysisMode === 'synthetic'
+                    ? 'bg-[#A84B2B]/20 border-[#A84B2B] text-[#A84B2B]'
+                    : 'bg-[#120b0a] border-[#6B6560]/30 text-[#6B6560] hover:border-[#A84B2B]/40 hover:text-[#e5e2e1]'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${analysisMode === 'synthetic' ? 'bg-[#A84B2B] animate-pulse' : 'bg-[#6B6560]/50'}`} />
+                Synthetic Analysis
+              </button>
 
-            <button
-              onClick={setLiveMode}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-['IBM_Plex_Mono'] uppercase tracking-widest transition-all border ${
-                analysisMode === 'live'
-                  ? 'bg-[#5B8059]/20 border-[#5B8059] text-[#5B8059]'
-                  : 'bg-[#120b0a] border-[#6B6560]/30 text-[#6B6560] hover:border-[#5B8059]/40 hover:text-[#e5e2e1]'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${analysisMode === 'live' ? 'bg-[#5B8059] animate-pulse' : 'bg-[#6B6560]/50'}`} />
-              Live Analysis
-            </button>
+              <button
+                onClick={setLiveMode}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-['IBM_Plex_Mono'] uppercase tracking-widest transition-all border ${
+                  analysisMode === 'live'
+                    ? 'bg-[#5B8059]/20 border-[#5B8059] text-[#5B8059]'
+                    : 'bg-[#120b0a] border-[#6B6560]/30 text-[#6B6560] hover:border-[#5B8059]/40 hover:text-[#e5e2e1]'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${analysisMode === 'live' ? 'bg-[#5B8059] animate-pulse' : 'bg-[#6B6560]/50'}`} />
+                Live Analysis
+              </button>
+            </div>
 
             {/* Reset scan */}
             {monitorStatus.current_file > 0 && (
@@ -361,14 +406,18 @@ export default function Blueprints() {
               ? 'border-[#6B6560]/50 text-[#e5e2e1] bg-[#120b0a]' 
               : analysisMode === 'synthetic' 
                 ? 'border-[#A84B2B]/40 text-[#A84B2B] bg-[#A84B2B]/10' 
-                : 'border-[#5B8059]/40 text-[#5B8059] bg-[#5B8059]/10'
+                : analysisMode === 'live'
+                  ? 'border-[#5B8059]/40 text-[#5B8059] bg-[#5B8059]/10'
+                  : 'border-[#6B6560]/20 text-[#6B6560] bg-[#120b0a]'
           }`}>
             {transitionMsg ? (
               <><span className="material-symbols-outlined animate-spin" style={{ fontSize: '18px' }}>sync</span> {transitionMsg}</>
             ) : analysisMode === 'synthetic' ? (
               <><span className="w-2.5 h-2.5 rounded-full bg-[#A84B2B] animate-pulse"></span> SYNTHETIC ANALYSIS MODE ACTIVE</>
-            ) : (
+            ) : analysisMode === 'live' ? (
               <><span className="w-2.5 h-2.5 rounded-full bg-[#5B8059] animate-pulse"></span> LIVE ANALYSIS MODE ACTIVE • Receiving real logs from Filebeat on Windows 11</>
+            ) : (
+              <><span className="w-2.5 h-2.5 rounded-full bg-[#6B6560]"></span> SYSTEM STANDBY • Select an Analysis Mode to begin scanning</>
             )}
           </div>
         </div>
@@ -383,31 +432,41 @@ export default function Blueprints() {
                 <span className="font-['Space_Grotesk'] font-bold uppercase text-sm tracking-widest">Latest Alerts</span>
                 <span className="font-['IBM_Plex_Mono'] text-[10px] text-[#6B6560]">{alerts.length} DETECTED</span>
               </div>
-              <div className="overflow-y-auto flex-1 font-['IBM_Plex_Mono'] text-[11px] no-scrollbar">
-                {alerts.slice(0, 80).map((alert, i) => (
-                  <div
-                    key={alert.alert_id || i}
-                    onClick={() => setActiveAlert(alert)}
-                    className={`p-4 border-b border-[#6B6560]/10 cursor-pointer transition-all duration-300 group ${activeAlert?.alert_id === alert.alert_id ? 'bg-[#120b0a]' : 'hover:bg-[#120b0a]'} ${i === 0 ? 'animate-pulse bg-[#A84B2B]/5' : ''}`}
-                  >
-                    <div className="flex justify-between mb-1">
-                      <span className={alert.severity === 'Critical' ? 'text-[#ffb4ab]' : alert.severity === 'High' ? 'text-yellow-400' : 'text-[#5B8059]'}>
-                        #{alert.alert_id || `AC-${i}`}
-                      </span>
-                      <span className="text-[#6B6560]">{formatTime(alert.timestamp)}</span>
+              <div className="flex-1 font-['IBM_Plex_Mono'] text-[11px] no-scrollbar overflow-hidden">
+                <VirtualList
+                  items={alerts}
+                  containerHeight={340}
+                  itemHeight={76}
+                  emptyState={
+                    <div className="p-8 text-[#6B6560] text-center flex flex-col items-center gap-3 uppercase text-[10px] h-full justify-center min-h-[340px]">
+                      <span className="material-symbols-outlined text-[32px] opacity-50">data_exploration</span>
+                      {analysisMode === 'synthetic' ? 'Scanning high-speed synthetic stream...' : analysisMode === 'live' ? 'Waiting for live logs from Filebeat...' : 'System offline. Select an analysis mode above.'}
                     </div>
-                    <p className={`uppercase transition-colors ${activeAlert?.alert_id === alert.alert_id ? 'text-[#A84B2B]' : 'text-[#e5e2e1] group-hover:text-[#A84B2B]'}`}>
-                      {alert.type}
-                    </p>
-                    <p className="text-neutral-600 text-[9px] mt-0.5">{alert.src_ip}</p>
-                  </div>
-                ))}
-                {alerts.length === 0 && (
-                  <div className="p-8 text-[#6B6560] text-center flex flex-col items-center gap-3 uppercase text-[10px] h-full justify-center">
-                    <span className="material-symbols-outlined text-[32px] opacity-50">data_exploration</span>
-                    {analysisMode === 'synthetic' ? 'Scanning synthetic log stream...' : 'Waiting for live logs from Filebeat...'}
-                  </div>
-                )}
+                  }
+                  renderItem={({ index, style }) => {
+                    const alert = alerts[index];
+                    if (!alert) return null;
+                    return (
+                      <div
+                        key={alert.alert_id}
+                        style={style}
+                        onClick={() => setActiveAlert(alert)}
+                        className={`p-4 border-b border-[#6B6560]/10 cursor-pointer transition-colors group ${activeAlert?.alert_id === alert.alert_id ? 'bg-[#120b0a]' : 'hover:bg-[#120b0a]'} ${index === 0 && analysisMode !== 'live' ? 'animate-pulse bg-[#A84B2B]/5' : ''}`}
+                      >
+                        <div className="flex justify-between mb-1">
+                          <span className={alert.severity === 'Critical' ? 'text-[#ffb4ab]' : alert.severity === 'High' ? 'text-yellow-400' : 'text-[#5B8059]'}>
+                            {alert.alert_id}
+                          </span>
+                          <span className="text-[#6B6560]">{formatTime(alert.timestamp)}</span>
+                        </div>
+                        <p className={`uppercase transition-colors ${activeAlert?.alert_id === alert.alert_id ? 'text-[#A84B2B]' : 'text-[#e5e2e1] group-hover:text-[#A84B2B]'}`}>
+                          {alert.type}
+                        </p>
+                        <p className="text-neutral-600 text-[9px] mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{alert.src_ip}</p>
+                      </div>
+                    )
+                  }}
+                />
               </div>
             </div>
 
@@ -488,10 +547,10 @@ export default function Blueprints() {
                   </div>
                 </>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center text-[#6B6560] font-['IBM_Plex_Mono'] uppercase tracking-widest min-h-[400px]">
-                  <span className="material-symbols-outlined text-4xl mb-4 opacity-30">science</span>
-                  {analysisMode === 'synthetic' ? 'Waiting for detections from synthetic stream...' : 'Waiting for live logs from Filebeat...'}
-                </div>
+                  <div className="h-full flex flex-col items-center justify-center text-[#6B6560] font-['IBM_Plex_Mono'] uppercase tracking-widest min-h-[400px]">
+                    <span className="material-symbols-outlined text-4xl mb-4 opacity-30">science</span>
+                    {analysisMode === 'synthetic' ? 'Waiting for detections from synthetic stream...' : analysisMode === 'live' ? 'Waiting for live logs from Filebeat...' : 'System offline.'}
+                  </div>
               )}
             </div>
           </div>

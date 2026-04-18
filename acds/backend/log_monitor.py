@@ -117,21 +117,38 @@ class LogMonitor:
                     except Exception:
                         pass
 
+            batch_size = 50
+            alert_batch = []
+            
             for idx, raw_event in enumerate(events):
                 if not self.is_running:
                     break
 
-                raw_event['source_file'] = filename
-                normalized = normalize(raw_event)
-                alerts = self._engine.detect(normalized)
-
-                for alert in alerts:
+                if 'alert_id' in raw_event:
+                    # Pre-computed high-speed alert!
+                    alert = raw_event
                     self._alert_store.append(alert)
-                    await self._broadcast(alert)
+                    alert_batch.append(alert)
                     count += 1
+                else:
+                    raw_event['source_file'] = filename
+                    normalized = normalize(raw_event)
+                    alerts = self._engine.detect(normalized)
+                    for alert in alerts:
+                        self._alert_store.append(alert)
+                        alert_batch.append(alert)
+                        count += 1
 
-                # Yield to event loop on EVERY event so WebSocket frames flush immediately
-                await asyncio.sleep(0)
+                if len(alert_batch) >= 50:
+                    await self._broadcast(alert_batch)
+                    alert_batch = []
+
+                if idx > 0 and idx % batch_size == 0:
+                    # 50 alerts / 0.1s = ~500 events per second.
+                    await asyncio.sleep(0.1)
+
+            if alert_batch:
+                await self._broadcast(alert_batch)
 
         except Exception:
             pass
