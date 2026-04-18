@@ -93,11 +93,9 @@ const geoCache = {};
 async function fetchGeo(ip) {
   if (geoCache[ip]) return geoCache[ip];
 
-  // Private/LAN IPs can't be geolocated — assign a realistic demo location
+  // Private/LAN IPs can't be geolocated — default to India (attacker's real location)
   if (isPrivateIP(ip)) {
-    const seed = ip.split('.').reduce((a, b) => a + parseInt(b), 0);
-    const geo = PRIVATE_IP_GEO[seed % PRIVATE_IP_GEO.length];
-    const result = { ...geo, isp: 'Unknown ISP' };
+    const result = { lat: 20.5937, lon: 78.9629, city: 'India', country: 'India', isp: 'Local Network' };
     geoCache[ip] = result;
     return result;
   }
