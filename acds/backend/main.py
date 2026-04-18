@@ -123,6 +123,10 @@ async def trigger_warp():
         for i in range(0, len(warp_alerts), batch_size):
             batch = warp_alerts[i:i+batch_size]
             for b in batch:
+                if b.get('src_ip') in config.ADMIN_WHITELIST:
+                    b['false_positive'] = True
+                    b['severity'] = 'Low'
+                    b['why_flagged'] = f"Source is whitelisted admin host ({b['src_ip']}), destination is {b.get('dst_ip', 'unknown')}"
                 alert_store.append(b)
             await broadcast(batch)
             await asyncio.sleep(0.1)

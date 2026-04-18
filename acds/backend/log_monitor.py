@@ -132,6 +132,12 @@ class LogMonitor:
                 if 'alert_id' in raw_event:
                     # Pre-computed high-speed alert!
                     alert = raw_event
+                    
+                    if alert.get('src_ip') in config.ADMIN_WHITELIST:
+                        alert['false_positive'] = True
+                        alert['severity'] = 'Low'
+                        alert['why_flagged'] = f"Source is whitelisted admin host ({alert['src_ip']}), destination is {alert.get('dst_ip', 'unknown')}"
+                        
                     self._alert_store.append(alert)
                     alert_batch.append(alert)
                     count += 1

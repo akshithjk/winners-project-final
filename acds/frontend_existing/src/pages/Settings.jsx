@@ -1,4 +1,71 @@
+import React, { useState, useEffect } from 'react';
+
 export default function Settings() {
+  const [whitelist, setWhitelist] = useState([]);
+  const [settings, setSettings] = useState(null);
+  
+  useEffect(() => {
+    fetch(`http://${window.location.hostname}:8000/settings`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.admin_whitelist) setWhitelist(data.admin_whitelist);
+        setSettings(data);
+      })
+      .catch(err => console.error("Could not load settings", err));
+  }, []);
+
+  const addIp = async () => {
+    const ip = prompt("Enter new whitelisted IP Address:");
+    if (!ip) return;
+    try {
+      const res = await fetch(`http://${window.location.hostname}:8000/settings/whitelist/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip })
+      });
+      const data = await res.json();
+      if (data.whitelist) setWhitelist(data.whitelist);
+    } catch (e) {
+      alert("Failed to add IP");
+    }
+  };
+
+  const removeIp = async (ip) => {
+    try {
+      const res = await fetch(`http://${window.location.hostname}:8000/settings/whitelist/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip })
+      });
+      const data = await res.json();
+      if (data.whitelist) setWhitelist(data.whitelist);
+    } catch (e) {
+      alert("Failed to remove IP");
+    }
+  };
+
+  const saveChanges = async () => {
+    const payload = {
+      brute_force_threshold: parseInt(document.getElementById('set_bf_thresh').value),
+      brute_force_window_sec: parseInt(document.getElementById('set_bf_win').value),
+      beacon_interval_variance: parseFloat(document.getElementById('set_bc_var').value),
+      exfil_threshold_bytes: parseInt(document.getElementById('set_ex_thresh').value),
+      correlation_window_sec: parseInt(document.getElementById('set_cor_win').value),
+      gemini_rate_limit_sec: parseInt(document.getElementById('set_gem_rate').value),
+    };
+    try {
+      const res = await fetch(`http://${window.location.hostname}:8000/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) alert("Settings saved dynamically to backend!");
+    } catch (e) {
+      alert("Failed to save settings");
+    }
+  };
+
+  if (!settings) return null;
 
   return (
     <div className="pt-8 pb-16 px-8 min-h-screen bg-[#0A0C0E] relative overflow-y-auto">
@@ -19,7 +86,7 @@ export default function Settings() {
         </div>
         <div className="flex gap-2">
           <button className="px-6 py-2 bg-[#0A0C0E] border border-[#6B6560]/20 font-['IBM_Plex_Mono'] text-[10px] tracking-tighter text-[#e5e2e1] hover:bg-[#120b0a] transition-colors uppercase">RESET_DEFAULTS</button>
-          <button className="px-6 py-2 bg-[#A84B2B] text-[#1a2b1a] font-['IBM_Plex_Mono'] text-[10px] font-bold tracking-tighter hover:shadow-[0_0_15px_rgba(152, 251, 152, 0.3)] transition-all uppercase">SAVE_CHANGES</button>
+          <button onClick={saveChanges} className="px-6 py-2 bg-[#A84B2B] text-[#1a2b1a] font-['IBM_Plex_Mono'] text-[10px] font-bold tracking-tighter hover:shadow-[0_0_15px_rgba(152, 251, 152, 0.3)] transition-all uppercase">SAVE_CHANGES</button>
         </div>
       </div>
 
@@ -40,7 +107,7 @@ export default function Settings() {
               <label className="block font-['IBM_Plex_Mono'] text-[10px] text-[#b9ccb2] tracking-widest uppercase">BRUTE_FORCE_THRESHOLD</label>
               <div className="relative group">
                 <div className="absolute left-0 top-0 w-1 h-full bg-[#A84B2B] scale-y-0 group-focus-within:scale-y-100 transition-transform"></div>
-                <input className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue="5" />
+                <input id="set_bf_thresh" className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue={settings.brute_force_threshold} />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-['IBM_Plex_Mono'] text-[#6B6560]/50 uppercase">attempts</span>
               </div>
             </div>
@@ -48,7 +115,7 @@ export default function Settings() {
               <label className="block font-['IBM_Plex_Mono'] text-[10px] text-[#b9ccb2] tracking-widest uppercase">BRUTE_FORCE_WINDOW_SEC</label>
               <div className="relative group">
                 <div className="absolute left-0 top-0 w-1 h-full bg-[#A84B2B] scale-y-0 group-focus-within:scale-y-100 transition-transform"></div>
-                <input className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue="60" />
+                <input id="set_bf_win" className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue={settings.brute_force_window_sec} />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-['IBM_Plex_Mono'] text-[#6B6560]/50 uppercase">seconds</span>
               </div>
             </div>
@@ -56,7 +123,7 @@ export default function Settings() {
               <label className="block font-['IBM_Plex_Mono'] text-[10px] text-[#b9ccb2] tracking-widest uppercase">BEACON_INTERVAL_VARIANCE</label>
               <div className="relative group">
                 <div className="absolute left-0 top-0 w-1 h-full bg-[#A84B2B] scale-y-0 group-focus-within:scale-y-100 transition-transform"></div>
-                <input className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="text" defaultValue="0.15" />
+                <input id="set_bc_var" className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="text" defaultValue={settings.beacon_interval_variance} />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-['IBM_Plex_Mono'] text-[#6B6560]/50 uppercase">float</span>
               </div>
             </div>
@@ -64,7 +131,7 @@ export default function Settings() {
               <label className="block font-['IBM_Plex_Mono'] text-[10px] text-[#b9ccb2] tracking-widest uppercase">EXFIL_THRESHOLD_BYTES</label>
               <div className="relative group">
                 <div className="absolute left-0 top-0 w-1 h-full bg-[#A84B2B] scale-y-0 group-focus-within:scale-y-100 transition-transform"></div>
-                <input className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue="10485760" />
+                <input id="set_ex_thresh" className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue={settings.exfil_threshold_bytes} />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-['IBM_Plex_Mono'] text-[#6B6560]/50 uppercase">bytes</span>
               </div>
             </div>
@@ -72,7 +139,7 @@ export default function Settings() {
               <label className="block font-['IBM_Plex_Mono'] text-[10px] text-[#b9ccb2] tracking-widest uppercase">CORRELATION_WINDOW_SEC</label>
               <div className="relative group">
                 <div className="absolute left-0 top-0 w-1 h-full bg-[#A84B2B] scale-y-0 group-focus-within:scale-y-100 transition-transform"></div>
-                <input className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue="300" />
+                <input id="set_cor_win" className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue={settings.correlation_window_sec} />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-['IBM_Plex_Mono'] text-[#6B6560]/50 uppercase">seconds</span>
               </div>
             </div>
@@ -80,7 +147,7 @@ export default function Settings() {
               <label className="block font-['IBM_Plex_Mono'] text-[10px] text-[#b9ccb2] tracking-widest uppercase">GEMINI_RATE_LIMIT_SEC</label>
               <div className="relative group">
                 <div className="absolute left-0 top-0 w-1 h-full bg-[#A84B2B] scale-y-0 group-focus-within:scale-y-100 transition-transform"></div>
-                <input className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue="10" />
+                <input id="set_gem_rate" className="w-full bg-[#080808] border-none py-3 px-4 font-['IBM_Plex_Mono'] text-[#A84B2B] focus:ring-0 outline-none" type="number" defaultValue={settings.gemini_rate_limit_sec} />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-['IBM_Plex_Mono'] text-[#6B6560]/50 uppercase">requests</span>
               </div>
             </div>
@@ -117,24 +184,20 @@ export default function Settings() {
             </h3>
             <div className="flex items-center gap-2 px-3 py-1 bg-[#120b0a] border border-[#6B6560]/10">
               <span className="material-symbols-outlined text-xs text-[#A84B2B]" style={{ verticalAlign: 'middle' }}>verified_user</span>
-              <span className="font-['IBM_Plex_Mono'] text-[10px] text-[#b9ccb2] uppercase">Currently 2 whitelisted hosts active</span>
+              <span className="font-['IBM_Plex_Mono'] text-[10px] text-[#b9ccb2] uppercase">Currently {whitelist.length} whitelisted hosts active</span>
             </div>
           </div>
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
-              <div className="bg-[#080808] border border-[#A84B2B]/20 px-4 py-2 flex items-center gap-4 group">
-                <span className="font-['IBM_Plex_Mono'] text-sm text-[#A84B2B]">192.168.1.1</span>
-                <button className="text-[#6B6560] hover:text-[#ffb4ab] transition-colors">
-                  <span className="material-symbols-outlined text-sm" style={{ verticalAlign: 'middle' }}>close</span>
-                </button>
-              </div>
-              <div className="bg-[#080808] border border-[#A84B2B]/20 px-4 py-2 flex items-center gap-4 group">
-                <span className="font-['IBM_Plex_Mono'] text-sm text-[#A84B2B]">10.0.0.12</span>
-                <button className="text-[#6B6560] hover:text-[#ffb4ab] transition-colors">
-                  <span className="material-symbols-outlined text-sm" style={{ verticalAlign: 'middle' }}>close</span>
-                </button>
-              </div>
-              <button className="bg-[#120b0a] border border-[#6B6560]/20 px-4 py-2 font-['IBM_Plex_Mono'] text-[10px] tracking-widest uppercase text-[#e5e2e1] hover:bg-[#A84B2B] hover:text-black transition-all flex items-center gap-2">
+              {whitelist.map((ip) => (
+                <div key={ip} className="bg-[#080808] border border-[#A84B2B]/20 px-4 py-2 flex items-center gap-4 group">
+                  <span className="font-['IBM_Plex_Mono'] text-sm text-[#A84B2B]">{ip}</span>
+                  <button onClick={() => removeIp(ip)} className="text-[#6B6560] hover:text-[#ffb4ab] transition-colors">
+                    <span className="material-symbols-outlined text-sm" style={{ verticalAlign: 'middle' }}>close</span>
+                  </button>
+                </div>
+              ))}
+              <button onClick={addIp} className="bg-[#120b0a] border border-[#6B6560]/20 px-4 py-2 font-['IBM_Plex_Mono'] text-[10px] tracking-widest uppercase text-[#e5e2e1] hover:bg-[#A84B2B] hover:text-black transition-all flex items-center gap-2">
                 <span className="material-symbols-outlined text-sm" style={{ verticalAlign: 'middle' }}>add</span>
                 ADD IP ADDRESS
               </button>
